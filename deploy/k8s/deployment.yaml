@@ -1,0 +1,110 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dps-inference
+  namespace: dps-system
+  labels:
+    app: dps-inference
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: dps-inference
+  template:
+    metadata:
+      labels:
+        app: dps-inference
+        version: v1
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: dps-inference
+        image: dps:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: MODEL_PATH
+          value: "/models/dps_model"
+        - name: CUDA_VISIBLE_DEVICES
+          value: "0"
+        - name: MAX_BATCH_SIZE
+          value: "32"
+        - name: TENSOR_PARALLEL_SIZE
+          value: "1"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: PYTORCH_CUDA_ALLOC_CONF
+          value: "max_split_size_mb:512"
+        resources:
+          requests:
+            memory: "32Gi"
+            cpu: "8"
+            nvidia.com/gpu: 1
+          limits:
+            memory: "64Gi"
+            cpu: "16"
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: model-volume
+          mountPath: /models
+          readOnly: true
+        - name: cache-volume
+          mountPath: /app/.cache
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 300
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+      volumes:
+      - name: model-volume
+        persistentVolumeClaim:
+          claimName: dps-model-pvc
+      - name: cache-volume
+        emptyDir:
+          sizeLimit: 10Gi
+      nodeSelector:
+        node.kubernetes.io/gpu: "true"
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dps-inference-service
+  namespace: dps-system
+  labels:
+    app: dps-inference
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: dps-inference
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600

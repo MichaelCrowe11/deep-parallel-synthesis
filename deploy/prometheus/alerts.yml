@@ -1,0 +1,101 @@
+groups:
+  - name: dps_alerts
+    interval: 30s
+    rules:
+      - alert: HighInferenceLatency
+        expr: histogram_quantile(0.95, rate(inference_duration_seconds_bucket[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          component: inference
+        annotations:
+          summary: "High inference latency detected"
+          description: "95th percentile inference latency is {{ $value }}s (threshold: 10s)"
+      
+      - alert: LowGPUUtilization
+        expr: avg(gpu_utilization_percent) < 30
+        for: 10m
+        labels:
+          severity: info
+          component: gpu
+        annotations:
+          summary: "Low GPU utilization"
+          description: "Average GPU utilization is {{ $value }}% (threshold: 30%)"
+      
+      - alert: HighGPUMemoryUsage
+        expr: (gpu_memory_used_bytes / gpu_memory_total_bytes) > 0.95
+        for: 5m
+        labels:
+          severity: critical
+          component: gpu
+        annotations:
+          summary: "High GPU memory usage"
+          description: "GPU memory usage is {{ $value | humanizePercentage }}"
+      
+      - alert: ModelLoadFailure
+        expr: increase(model_load_failures_total[5m]) > 0
+        labels:
+          severity: critical
+          component: model
+        annotations:
+          summary: "Model loading failures detected"
+          description: "{{ $value }} model load failures in the last 5 minutes"
+      
+      - alert: HighErrorRate
+        expr: rate(inference_errors_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          component: inference
+        annotations:
+          summary: "High error rate"
+          description: "Error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+      
+      - alert: ValidationFailureRate
+        expr: rate(validation_failures_total[5m]) / rate(validation_attempts_total[5m]) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+          component: validation
+        annotations:
+          summary: "High validation failure rate"
+          description: "Validation failure rate is {{ $value | humanizePercentage }} (threshold: 20%)"
+      
+      - alert: PodCrashLooping
+        expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: kubernetes
+        annotations:
+          summary: "Pod {{ $labels.pod }} is crash looping"
+          description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes"
+      
+      - alert: HighMemoryUsage
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: memory
+        annotations:
+          summary: "High memory usage in {{ $labels.pod }}"
+          description: "Memory usage is {{ $value | humanizePercentage }} of limit"
+      
+      - alert: InferenceThroughputLow
+        expr: rate(inference_requests_total[5m]) < 10
+        for: 10m
+        labels:
+          severity: info
+          component: throughput
+        annotations:
+          summary: "Low inference throughput"
+          description: "Inference throughput is {{ $value }} requests/sec (expected: >10)"
+      
+      - alert: ReasoningChainTimeout
+        expr: increase(reasoning_chain_timeouts_total[5m]) > 5
+        labels:
+          severity: warning
+          component: reasoning
+        annotations:
+          summary: "Reasoning chain timeouts detected"
+          description: "{{ $value }} reasoning chain timeouts in the last 5 minutes"

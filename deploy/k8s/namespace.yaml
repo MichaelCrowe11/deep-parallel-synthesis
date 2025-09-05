@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dps-system
+  labels:
+    name: dps-system
+    app: deep-parallel-synthesis

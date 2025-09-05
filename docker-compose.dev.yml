@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  dps-inference-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dps:latest
+    container_name: dps-inference-dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+    environment:
+      - MODEL_PATH=/app/models/dps_model
+      - MAX_BATCH_SIZE=8
+      - TENSOR_PARALLEL_SIZE=1
+      - LOG_LEVEL=DEBUG
+      - TEST_MODE=true
+      - CPU_ONLY=true
+    restart: unless-stopped
+    command: >
+      python serving/inference_server.py
+      --model-path /app/models/dps_model
+      --host 0.0.0.0
+      --port 8000
+      --max-batch-size 8
+
+  redis:
+    image: redis:7-alpine
+    container_name: dps-redis-dev
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dps-prometheus-dev
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dps-grafana-dev
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    restart: unless-stopped

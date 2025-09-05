@@ -1,0 +1,106 @@
+version: '3.8'
+
+services:
+  dps-inference:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dps:latest
+    container_name: dps-inference-server
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - dps-cache:/app/.cache
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+      - MODEL_PATH=/app/models/dps_model
+      - MAX_BATCH_SIZE=32
+      - TENSOR_PARALLEL_SIZE=1
+      - LOG_LEVEL=INFO
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+    networks:
+      - dps-network
+    command: >
+      python serving/inference_server.py
+      --model-path ${MODEL_PATH}
+      --host 0.0.0.0
+      --port 8000
+      --tensor-parallel-size ${TENSOR_PARALLEL_SIZE}
+      --max-batch-size ${MAX_BATCH_SIZE}
+
+  redis:
+    image: redis:7-alpine
+    container_name: dps-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - dps-network
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: dps-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    networks:
+      - dps-network
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: dps-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=redis-datasource
+    volumes:
+      - ./deploy/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./deploy/grafana/datasources:/etc/grafana/provisioning/datasources
+      - grafana-data:/var/lib/grafana
+    networks:
+      - dps-network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: dps-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./deploy/nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - dps-inference
+    networks:
+      - dps-network
+    restart: unless-stopped
+
+volumes:
+  dps-cache:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+
+networks:
+  dps-network:
+    driver: bridge
