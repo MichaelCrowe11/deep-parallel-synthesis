@@ -1,0 +1,238 @@
+groups:
+- name: dps-alerts
+  rules:
+  # API Health Alerts
+  - alert: DPSAPIDown
+    expr: up{job="dps-api"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      component: api
+    annotations:
+      summary: "DPS API is down"
+      description: "DPS API instance {{ $labels.instance }} has been down for more than 1 minute."
+      runbook_url: "https://docs.dps.com/runbooks/api-down"
+
+  - alert: DPSHighErrorRate
+    expr: (sum(rate(dps_api_requests_total{status=~"4..|5.."}[5m])) / sum(rate(dps_api_requests_total[5m]))) * 100 > 5
+    for: 2m
+    labels:
+      severity: warning
+      component: api
+    annotations:
+      summary: "DPS API high error rate"
+      description: "DPS API error rate is {{ $value }}% over the last 5 minutes."
+
+  - alert: DPSHighLatency
+    expr: histogram_quantile(0.95, sum(rate(dps_api_request_duration_seconds_bucket{endpoint="/reason"}[5m])) by (le)) > 10
+    for: 5m
+    labels:
+      severity: warning
+      component: api
+    annotations:
+      summary: "DPS API high latency"
+      description: "DPS API 95th percentile latency is {{ $value }}s for reasoning requests."
+
+  # Resource Alerts
+  - alert: DPSHighCPUUsage
+    expr: avg(rate(container_cpu_usage_seconds_total{namespace="dps-system"}[5m])) * 100 > 80
+    for: 5m
+    labels:
+      severity: warning
+      component: infrastructure
+    annotations:
+      summary: "DPS high CPU usage"
+      description: "DPS namespace CPU usage is {{ $value }}%."
+
+  - alert: DPSHighMemoryUsage
+    expr: (avg(container_memory_usage_bytes{namespace="dps-system"}) / avg(container_spec_memory_limit_bytes{namespace="dps-system"})) * 100 > 85
+    for: 5m
+    labels:
+      severity: warning
+      component: infrastructure
+    annotations:
+      summary: "DPS high memory usage"
+      description: "DPS namespace memory usage is {{ $value }}%."
+
+  - alert: DPSLowDiskSpace
+    expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+    for: 5m
+    labels:
+      severity: critical
+      component: infrastructure
+    annotations:
+      summary: "DPS low disk space"
+      description: "Disk space is {{ $value }}% available on {{ $labels.instance }}."
+
+  # Model Performance Alerts
+  - alert: DPSSlowModelLoading
+    expr: histogram_quantile(0.95, sum(rate(dps_model_load_time_seconds_bucket[5m])) by (le)) > 60
+    for: 3m
+    labels:
+      severity: warning
+      component: models
+    annotations:
+      summary: "DPS slow model loading"
+      description: "Model loading 95th percentile time is {{ $value }}s."
+
+  - alert: DPSLowReasoningQuality
+    expr: avg(dps_synthesis_quality) < 0.7
+    for: 10m
+    labels:
+      severity: warning
+      component: reasoning
+    annotations:
+      summary: "DPS low reasoning quality"
+      description: "Average synthesis quality is {{ $value }}, below threshold of 0.7."
+
+  - alert: DPSLowConfidence
+    expr: avg(dps_reasoning_confidence) < 0.6
+    for: 10m
+    labels:
+      severity: warning
+      component: reasoning
+    annotations:
+      summary: "DPS low confidence scores"
+      description: "Average reasoning confidence is {{ $value }}, below threshold of 0.6."
+
+  # Database Alerts
+  - alert: DPSMongoDBDown
+    expr: up{job="mongodb"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      component: database
+    annotations:
+      summary: "DPS MongoDB is down"
+      description: "MongoDB instance {{ $labels.instance }} has been down for more than 1 minute."
+
+  - alert: DPSRedisDown
+    expr: up{job="redis"} == 0
+    for: 1m
+    labels:
+      severity: critical
+      component: cache
+    annotations:
+      summary: "DPS Redis is down"
+      description: "Redis instance {{ $labels.instance }} has been down for more than 1 minute."
+
+  - alert: DPSHighDatabaseConnections
+    expr: mongodb_connections{state="current"} > 1000
+    for: 5m
+    labels:
+      severity: warning
+      component: database
+    annotations:
+      summary: "DPS high database connections"
+      description: "MongoDB has {{ $value }} current connections."
+
+  # Pod Health Alerts
+  - alert: DPSPodCrashLooping
+    expr: rate(kube_pod_container_status_restarts_total{namespace="dps-system"}[15m]) > 0
+    for: 5m
+    labels:
+      severity: warning
+      component: pods
+    annotations:
+      summary: "DPS pod is crash looping"
+      description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is crash looping."
+
+  - alert: DPSPodNotReady
+    expr: kube_pod_status_ready{namespace="dps-system", condition="false"} == 1
+    for: 5m
+    labels:
+      severity: warning
+      component: pods
+    annotations:
+      summary: "DPS pod not ready"
+      description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} is not ready."
+
+  # Security Alerts
+  - alert: DPSUnauthorizedAccess
+    expr: sum(rate(dps_api_requests_total{status="401"}[5m])) > 10
+    for: 2m
+    labels:
+      severity: warning
+      component: security
+    annotations:
+      summary: "DPS high unauthorized access attempts"
+      description: "{{ $value }} unauthorized access attempts per second in the last 5 minutes."
+
+  - alert: DPSRateLimitExceeded
+    expr: sum(rate(dps_api_requests_total{status="429"}[5m])) > 5
+    for: 2m
+    labels:
+      severity: info
+      component: security
+    annotations:
+      summary: "DPS rate limit exceeded"
+      description: "{{ $value }} rate limit exceeded responses per second in the last 5 minutes."
+
+# Model-specific alerts
+- name: dps-model-alerts
+  rules:
+  - alert: DPSModelMemoryLeak
+    expr: increase(go_memstats_heap_alloc_bytes{job="dps-api"}[1h]) > 500000000
+    for: 10m
+    labels:
+      severity: warning
+      component: models
+    annotations:
+      summary: "DPS potential memory leak"
+      description: "Memory usage increased by {{ $value | humanize }}B in the last hour."
+
+  - alert: DPSModelTimeout
+    expr: sum(rate(dps_reasoning_tasks_total{status="timeout"}[5m])) > 1
+    for: 3m
+    labels:
+      severity: warning
+      component: models
+    annotations:
+      summary: "DPS model timeouts"
+      description: "{{ $value }} model timeouts per second in the last 5 minutes."
+
+# Business Logic Alerts
+- name: dps-business-alerts
+  rules:
+  - alert: DPSLowThroughput
+    expr: sum(rate(dps_reasoning_tasks_total{status="completed"}[5m])) < 1
+    for: 10m
+    labels:
+      severity: warning
+      component: business
+    annotations:
+      summary: "DPS low reasoning throughput"
+      description: "Reasoning completion rate is {{ $value }} per second, below expected threshold."
+
+  - alert: DPSHighRejectionRate
+    expr: (sum(rate(dps_reasoning_tasks_total{status="failed"}[5m])) / sum(rate(dps_reasoning_tasks_total[5m]))) * 100 > 10
+    for: 5m
+    labels:
+      severity: warning
+      component: business
+    annotations:
+      summary: "DPS high task rejection rate"
+      description: "{{ $value }}% of reasoning tasks are failing."
+
+# External Dependencies
+- name: dps-dependency-alerts
+  rules:
+  - alert: DPSOllamaDown
+    expr: up{job="ollama"} == 0
+    for: 2m
+    labels:
+      severity: critical
+      component: dependencies
+    annotations:
+      summary: "Ollama service is down"
+      description: "Ollama service has been down for more than 2 minutes."
+
+  - alert: DPSExternalAPITimeout
+    expr: histogram_quantile(0.95, sum(rate(dps_external_api_duration_seconds_bucket[5m])) by (le)) > 30
+    for: 5m
+    labels:
+      severity: warning
+      component: dependencies
+    annotations:
+      summary: "External API high latency"
+      description: "External API 95th percentile response time is {{ $value }}s."
