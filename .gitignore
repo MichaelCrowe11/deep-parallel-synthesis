@@ -109,3 +109,12 @@ redis-data/
 *.backup
 temp/
 tmp/
+
+# DPS specific additions
+dps_learning.db
+wandb/
+tensorboard/
+training_data/
+mobile-app/
+web-interface/
+*.db
