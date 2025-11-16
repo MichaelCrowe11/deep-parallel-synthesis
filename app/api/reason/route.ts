@@ -252,10 +252,10 @@ export async function POST(req: Request) {
   const hasXAI = !!process.env.XAI_API_KEY
   const hasAIProvider = hasGroq || hasXAI
 
-  const modelConfig = hasXAI
-    ? { model: "xai/grok-beta", provider: "xAI" }
-    : hasGroq
-      ? { model: "groq/llama-3.3-70b-versatile", provider: "Groq" }
+  const modelConfig = hasGroq
+    ? { model: "groq/llama-3.3-70b-versatile", provider: "Groq" }
+    : hasXAI
+      ? { model: "xai/grok-beta", provider: "xAI" }
       : null
 
   console.log("[v0] AI Provider available:", hasAIProvider, modelConfig)
@@ -283,10 +283,9 @@ export async function POST(req: Request) {
 
   try {
     console.log("[v0] Generating with AI Gateway:", modelConfig.model)
+    console.log("[v0] Using API key:", modelConfig.provider, "key exists:", modelConfig.provider === "Groq" ? !!process.env.GROQ_API_KEY : !!process.env.XAI_API_KEY)
     
-    const { generateObject } = await import("ai")
-    
-    const { object } = await generateObject({
+    const result = await generateObject({
       model: modelConfig.model,
       schema: reasoningSchema,
       prompt: `${PROMPTS[type as keyof typeof PROMPTS]}
@@ -298,27 +297,46 @@ Provide DETAILED step-by-step reasoning with multiple substeps for each phase. B
       maxTokens: 8000,
     })
 
-    console.log("[v0] AI reasoning complete")
+    console.log("[v0] AI reasoning complete, received object:", !!result.object)
+
+    const responseData = result.object
 
     try {
-      await setCachedReasoning(problem, object, 3600)
+      await setCachedReasoning(problem, responseData, 3600)
       const supabase = await createClient()
       await supabase.from("reasoning_sessions").insert({
         query: problem,
-        response: JSON.stringify(object),
+        response: JSON.stringify(responseData),
         model: modelConfig.model,
         credits_used: 1,
         user_id: userId || null,
       })
+      console.log("[v0] Cached and saved AI result")
     } catch (error) {
       console.log("[v0] Failed to cache/save AI result:", error)
     }
 
-    return Response.json(object)
+    return Response.json(responseData)
   } catch (aiError: any) {
-    console.error("[v0] AI Gateway error:", aiError?.message || aiError)
+    console.error("[v0] AI Gateway error details:", {
+      message: aiError?.message,
+      cause: aiError?.cause,
+      stack: aiError?.stack?.split('\n').slice(0, 3).join('\n'),
+    })
     
+    console.log("[v0] Falling back to mock reasoning due to AI error")
     const mockData = generateMockReasoning(problem, type)
-    return Response.json({ ...mockData, demo_mode: true, error: "AI Gateway error, using fallback reasoning" })
+    
+    try {
+      await setCachedReasoning(problem, mockData, 3600)
+    } catch (error) {
+      console.log("[v0] Failed to cache mock fallback:", error)
+    }
+    
+    return Response.json({ 
+      ...mockData, 
+      demo_mode: true, 
+      error_info: "AI Gateway unavailable - using enhanced mock reasoning" 
+    })
   }
 }

@@ -43,20 +43,20 @@ Deep Parallel Synthesis implements a novel approach to scientific reasoning that
 
 ## Installation
 
-```bash
+\`\`\`bash
 # Clone the repository
 git clone https://github.com/your-org/deep-parallel-synthesis.git
 cd deep-parallel-synthesis
 
 # Install dependencies
 pip install -e .
-```
+\`\`\`
 
 ## Quick Start
 
 ### Training
 
-```bash
+\`\`\`bash
 # Prepare your data in the format shown in data/example_train.json
 
 # Train the model
@@ -65,11 +65,11 @@ python scripts/train.py \
   --train-data data/train.json \
   --eval-data data/eval.json \
   --output-dir ./outputs/dps_model
-```
+\`\`\`
 
 ### Inference
 
-```bash
+\`\`\`bash
 # Interactive mode
 python scripts/inference.py \
   --model-path ./outputs/dps_model/final_model \
@@ -87,17 +87,17 @@ python scripts/inference.py \
   --mode batch \
   --input-file prompts.json \
   --output-file results.json
-```
+\`\`\`
 
 ### Serving
 
-```bash
+\`\`\`bash
 # Start the inference server
 python serving/inference_server.py \
   --model-path ./outputs/dps_model/final_model \
   --host 0.0.0.0 \
   --port 8000
-```
+\`\`\`
 
 API endpoints:
 - `POST /v1/generate` - Generate response
@@ -107,14 +107,14 @@ API endpoints:
 
 ### Evaluation
 
-```bash
+\`\`\`bash
 # Evaluate model performance
 python scripts/evaluate.py \
   --model-path ./outputs/dps_model/final_model \
   --dataset data/test.json \
   --output-dir ./evaluation_results \
   --generate-report
-```
+\`\`\`
 
 ## Model Configuration
 
@@ -136,7 +136,7 @@ Key configuration parameters in `configs/training_config.yaml`:
 
 Training data should follow this format:
 
-```json
+\`\`\`json
 {
   "prompt": "Scientific question or problem",
   "response": "Expected scientific response",
@@ -144,7 +144,7 @@ Training data should follow this format:
   "evidence": ["Supporting evidence 1", "Evidence 2"],
   "validation_score": 0.95
 }
-```
+\`\`\`
 
 ## Evaluation Metrics
 
@@ -186,14 +186,14 @@ MIT License - See LICENSE file for details
 
 If you use Deep Parallel Synthesis in your research, please cite:
 
-```bibtex
+\`\`\`bibtex
 @software{deep_parallel_synthesis,
   title = {Deep Parallel Synthesis: Advanced Scientific Reasoning},
   author = {DPS Team},
   year = {2024},
   url = {https://github.com/your-org/deep-parallel-synthesis}
 }
-```
+\`\`\`
 
 ## Contributing
 
