@@ -258,10 +258,10 @@ export async function POST(req: Request) {
       ? { model: "xai/grok-beta", provider: "xAI" }
       : null
 
-  console.log("[v0] AI Provider available:", hasAIProvider, modelConfig)
+  console.log("[v0] AI Provider check:", { hasGroq, hasXAI, hasAIProvider })
 
   if (!hasAIProvider || !modelConfig) {
-    console.log("[v0] No AI provider, returning mock reasoning")
+    console.log("[v0] No AI provider configured - using demo mode")
     const mockData = generateMockReasoning(problem, type)
     
     try {
@@ -270,7 +270,7 @@ export async function POST(req: Request) {
       await supabase.from("reasoning_sessions").insert({
         query: problem,
         response: JSON.stringify(mockData),
-        model: "crowe-logic-v1",
+        model: "crowe-logic-v1-demo",
         credits_used: 0,
         user_id: userId || null,
       })
@@ -282,8 +282,7 @@ export async function POST(req: Request) {
   }
 
   try {
-    console.log("[v0] Generating with AI Gateway:", modelConfig.model)
-    console.log("[v0] Using API key:", modelConfig.provider, "key exists:", modelConfig.provider === "Groq" ? !!process.env.GROQ_API_KEY : !!process.env.XAI_API_KEY)
+    console.log("[v0] Starting AI generation with:", modelConfig.model)
     
     const result = await generateObject({
       model: modelConfig.model,
@@ -297,7 +296,7 @@ Provide DETAILED step-by-step reasoning with multiple substeps for each phase. B
       maxTokens: 8000,
     })
 
-    console.log("[v0] AI reasoning complete, received object:", !!result.object)
+    console.log("[v0] AI reasoning complete")
 
     const responseData = result.object
 
@@ -318,17 +317,16 @@ Provide DETAILED step-by-step reasoning with multiple substeps for each phase. B
 
     return Response.json(responseData)
   } catch (aiError: any) {
-    console.error("[v0] AI Gateway error details:", {
+    console.error("[v0] AI error:", {
       message: aiError?.message,
       cause: aiError?.cause,
-      stack: aiError?.stack?.split('\n').slice(0, 3).join('\n'),
     })
     
-    console.log("[v0] Falling back to mock reasoning due to AI error")
+    console.log("[v0] Falling back to demo mode due to AI error")
     const mockData = generateMockReasoning(problem, type)
     
     try {
-      await setCachedReasoning(problem, mockData, 3600)
+      await setCachedReasoning(problem, mockData, 1800)
     } catch (error) {
       console.log("[v0] Failed to cache mock fallback:", error)
     }
@@ -336,7 +334,7 @@ Provide DETAILED step-by-step reasoning with multiple substeps for each phase. B
     return Response.json({ 
       ...mockData, 
       demo_mode: true, 
-      error_info: "AI Gateway unavailable - using enhanced mock reasoning" 
+      error_info: "AI temporarily unavailable" 
     })
   }
 }
